@@ -24,22 +24,31 @@ GRAY = (100, 100, 100)
 
 font = pygame.font.SysFont(None, 24)
 
-# Ввод параметров пользователем
-def get_input(prompt):
-    while True:
-        try:
-            val = float(input(prompt))
-            if val <= 0:
-                print("Значение должно быть положительным.")
-                continue
-            return val
-        except ValueError:
-            print("Введите корректное число.")
+# Параметры симуляции с значениями по умолчанию
+# Могут быть переданы через аргументы командной строки:
+# python main.py 100 200 3
 
-print("=== Настройка симуляции ===")
-speed_drone_kmh = get_input("Скорость квадрокоптера (км/ч): ")
-speed_missile_kmh = get_input("Скорость ракеты (км/ч): ")
-zone_radius_km = get_input("Радиус зоны вокруг квадрокоптера (км): ")
+def get_parameters():
+    import sys
+    
+    defaults = {
+        'speed_drone_kmh': 100,        # скорость дрона (км/ч)
+        'speed_missile_kmh': 200,      # скорость ракеты (км/ч)
+        'zone_radius_km': 3.0           # радиус зоны (км)
+    }
+    
+    # Если переданы аргументы, используем их
+    if len(sys.argv) > 3:
+        try:
+            defaults['speed_drone_kmh'] = float(sys.argv[1])
+            defaults['speed_missile_kmh'] = float(sys.argv[2])
+            defaults['zone_radius_km'] = float(sys.argv[3])
+        except ValueError:
+            pass  # Используем значения по умолчанию
+    
+    return defaults['speed_drone_kmh'], defaults['speed_missile_kmh'], defaults['zone_radius_km']
+
+speed_drone_kmh, speed_missile_kmh, zone_radius_km = get_parameters()
 
 # Перевод скоростей в км/с
 speed_drone = speed_drone_kmh / 3600.0
@@ -73,6 +82,8 @@ clock = pygame.time.Clock()
 dt = 1.0
 
 # Генерация начальной позиции ракеты
+
+
 def spawn_missile():
     side = random.choice(['top', 'bottom', 'left', 'right'])
     margin_km = 1.0
@@ -90,6 +101,7 @@ def spawn_missile():
         y = random.uniform(0, HEIGHT / SCALE)
     angle = math.atan2(center_y_km - y, center_x_km - x)
     return [x, y], angle
+
 
 # Основной цикл
 running = True
@@ -127,13 +139,15 @@ while running:
         missile_distance += speed_missile * dt
 
         # Проверка: пересекла ли ракета зону?
-        dist_to_drone = math.hypot(missile_pos[0] - drone_pos[0], missile_pos[1] - drone_pos[1])
+        dist_to_drone = math.hypot(
+            missile_pos[0] - drone_pos[0], missile_pos[1] - drone_pos[1])
         if dist_to_drone <= zone_radius_km and not intercepted:
             pass
 
     # Движение квадрокоптера (если ракета внутри зоны)
     if missile_active and not explosion:
-        dist_to_missile = math.hypot(missile_pos[0] - drone_pos[0], missile_pos[1] - drone_pos[1])
+        dist_to_missile = math.hypot(
+            missile_pos[0] - drone_pos[0], missile_pos[1] - drone_pos[1])
         if dist_to_missile <= zone_radius_km:
             # Направление к ракете
             if dist_to_missile > 0:
@@ -144,7 +158,8 @@ while running:
                 drone_distance += speed_drone * dt
 
             # Проверка перехвата
-            new_dist = math.hypot(missile_pos[0] - drone_pos[0], missile_pos[1] - drone_pos[1])
+            new_dist = math.hypot(
+                missile_pos[0] - drone_pos[0], missile_pos[1] - drone_pos[1])
             if new_dist < 0.1:
                 explosion = True
                 explosion_time = 0
