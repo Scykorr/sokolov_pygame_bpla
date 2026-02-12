@@ -6,26 +6,30 @@ import random
 # Инициализация Pygame
 pygame.init()
 
-# Параметры окна
-WIDTH, HEIGHT = 900, 700
-SCALE = 50  # 1 км = 50 пикселей
+# Параметры окна (совпадают с tkinter версией)
+WIDTH_KM = 16.0   # ширина карты в км
+HEIGHT_KM = 12.0  # высота карты в км
+SCALE = 45        # пикселей на 1 км
+WIDTH = int(WIDTH_KM * SCALE)    # 720 px
+HEIGHT = int(HEIGHT_KM * SCALE)  # 540 px
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Квадрокоптер vs Ракета")
+pygame.display.set_caption("🚁 Квадрокоптер vs Ракета — Симуляция перехвата")
 
 # Цвета
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-BLUE = (0, 100, 255)
-RED = (255, 50, 50)
-GREEN = (50, 200, 50)
-YELLOW = (255, 255, 0)
+BLUE = (59, 130, 246)  # Более яркий синий
+RED = (239, 68, 68)    # Более яркий красный
+GREEN = (34, 197, 94)
+YELLOW = (255, 204, 0)
 GRAY = (150, 150, 150)
 DARK_GRAY = (100, 100, 100)
-LIGHT_BLUE = (173, 216, 230)
+LIGHT_BLUE = (230, 247, 255)
+LIGHT_GRAY = (160, 196, 255)
 
-font_small = pygame.font.SysFont(None, 20)
-font_medium = pygame.font.SysFont(None, 24)
+font_small = pygame.font.SysFont(None, 18)
+font_medium = pygame.font.SysFont(None, 22)
 font_large = pygame.font.SysFont(None, 32)
 
 
@@ -67,8 +71,12 @@ class InputField:
         label_surf = font_small.render(self.label, True, BLACK)
         surface.blit(label_surf, (self.rect.x, self.rect.y - 25))
 
-        color = LIGHT_BLUE if self.active else (
-            255, 100, 100 if self.error else 255)
+        if self.active:
+            color = LIGHT_BLUE
+        elif self.error:
+            color = (255, 100, 100)
+        else:
+            color = WHITE
         pygame.draw.rect(surface, color, self.rect)
         pygame.draw.rect(surface, BLACK, self.rect, 2)
 
@@ -111,103 +119,98 @@ class SimulationApp:
         self.simulation_paused = False
         self.simulation_finished = False
 
-        # Поля ввода
+        # Поля ввода (со значениями по умолчанию)
         input_y = 150
         self.drone_speed_input = InputField(
-            100, input_y, 250, 35, "Скорость дрона атаки (км/ч):", 100)
+            100, input_y, 200, 35, "Скорость дрона (км/ч):", 80, 0.1, 200)
         self.missile_speed_input = InputField(
-            100, input_y + 80, 250, 35, "Скорость ракеты защиты (км/ч):", 200)
+            100, input_y + 80, 200, 35, "Скорость ракеты (км/ч):", 120, 0.1, 500)
         self.zone_radius_input = InputField(
-            100, input_y + 160, 250, 35, "Радиус зоны (км):", 3)
+            100, input_y + 160, 200, 35, "Радиус зоны (км):", 3.0, 0.1, 20)
 
         # Кнопки
         self.start_button = Button(
-            100, 350, 250, 50, "НАЧАТЬ СИМУЛЯЦИЮ", color=(100, 200, 100))
+            100, 350, 160, 50, "▶️ Старт", color=(100, 200, 100))
         self.pause_button = Button(
-            650, 10, 120, 40, "ПАУЗА", color=(200, 150, 50))
+            600, 10, 100, 40, "⏸ Пауза", color=(200, 150, 50))
         self.reset_button = Button(
-            780, 10, 110, 40, "СБРОСИТЬ", color=(200, 50, 50))
+            720, 10, 100, 40, "🔄 Сброс", color=(200, 50, 50))
 
         # Переменные симуляции
-        self.speed_drone_kmh = 100
-        self.speed_missile_kmh = 200
+        self.speed_drone_kmh = 80.0
+        self.speed_missile_kmh = 120.0
         self.zone_radius_km = 3.0
-
-        # Загрузка спрайтов
-        self.rocket_img = None
-        self.drone_img = None
-        self.use_sprites = False
-        try:
-            self.rocket_img = pygame.image.load("rocket.png").convert_alpha()
-            self.drone_img = pygame.image.load("drone.png").convert_alpha()
-            self.use_sprites = True
-            print("✓ Спрайты загружены")
-        except pygame.error as e:
-            print(f"⚠ Не удалось загрузить спрайты: {e}")
-            print("  Буду использовать геометрические фигуры")
 
         self.clock = pygame.time.Clock()
         self.reset_simulation()
 
+    def km_to_px(self, x_km, y_km):
+        """
+        Преобразование из км в пиксели.
+        Начало (0,0) км = левый НИЖНИЙ угол.
+        Canvas (0,0) = левый верхний угол → инвертируем Y.
+        """
+        px_x = int(x_km * SCALE)
+        px_y = int((HEIGHT_KM - y_km) * SCALE)
+        return px_x, px_y
+
     def reset_simulation(self):
         """Сброс симуляции"""
-        self.speed_drone = self.speed_drone_kmh / 3600.0
-        self.speed_missile = self.speed_missile_kmh / 3600.0
+        self.speed_drone = self.speed_drone_kmh / 3600.0  # км/сек
+        self.speed_missile = self.speed_missile_kmh / 3600.0  # км/сек
 
-        center_x_km = WIDTH / (2 * SCALE)
-        center_y_km = HEIGHT / (2 * SCALE)
+        # Дрон в центре карты (8, 6) км
+        self.drone_pos = [WIDTH_KM / 2, HEIGHT_KM / 2]
 
-        # Ракета неподвижна в центре
-        self.missile_pos = [center_x_km, center_y_km]
-        # Дрон атакует с края
-        self.drone_active = False
-        self.drone_pos = [0.0, 0.0]
-        self.drone_angle = 0.0
-        self.drone_direction_change_timer = 0
-        self.drone_direction_change_interval = random.uniform(2, 6)
+        # Ракета изначально неактивна
+        self.missile_pos = [0.0, 0.0]
+        self.missile_angle = 0.0
+        self.missile_active = False
+        self.missile_direction_change_timer = 0
+        self.missile_direction_change_interval = random.uniform(2, 6)
 
         self.explosion = False
-        self.explosion_time = 0
+        self.explosion_time = 0.0
         self.explosion_duration = 1.0
 
         self.time_elapsed = 0.0
         self.drone_distance = 0.0
         self.missile_distance = 0.0
-        self.drone_detected = False
-        self.tracking_active = False
         self.intercepted = False
         self.simulation_finished = False
         self.simulation_paused = False
 
-    def spawn_drone(self):
-        """Спавн дрона на краю экрана"""
+    def spawn_missile(self):
+        """Генерация стартовой позиции ракеты на краю карты"""
         side = random.choice(['top', 'bottom', 'left', 'right'])
-        margin_km = 1.0
+        margin_km = 0.3  # минимальный отступ за край
+
         if side == 'top':
-            x = random.uniform(0, WIDTH / SCALE)
-            y = -margin_km
+            x = random.uniform(1, WIDTH_KM - 1)
+            y = HEIGHT_KM + margin_km
         elif side == 'bottom':
-            x = random.uniform(0, WIDTH / SCALE)
-            y = HEIGHT / SCALE + margin_km
+            x = random.uniform(1, WIDTH_KM - 1)
+            y = -margin_km
         elif side == 'left':
             x = -margin_km
-            y = random.uniform(0, HEIGHT / SCALE)
+            y = random.uniform(1, HEIGHT_KM - 1)
         else:  # right
-            x = WIDTH / SCALE + margin_km
-            y = random.uniform(0, HEIGHT / SCALE)
+            x = WIDTH_KM + margin_km
+            y = random.uniform(1, HEIGHT_KM - 1)
 
-        angle = random.uniform(0, 2 * math.pi)
+        # Направление на дрон (в центре)
+        angle = math.atan2(self.drone_pos[1] - y, self.drone_pos[0] - x)
         return [x, y], angle
 
     def draw_setup_screen(self):
         """Рисует экран настройки"""
         screen.fill(WHITE)
 
-        title = font_large.render("КВАДРОКОПТЕР vs РАКЕТА", True, BLACK)
+        title = font_large.render("🚁 Квадрокоптер vs Ракета", True, BLACK)
         screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 30))
 
-        subtitle = font_medium.render("Настройка симуляции", True, DARK_GRAY)
-        screen.blit(subtitle, (WIDTH // 2 - subtitle.get_width() // 2, 80))
+        subtitle = font_medium.render("Симуляция перехвата", True, DARK_GRAY)
+        screen.blit(subtitle, (WIDTH // 2 - subtitle.get_width() // 2, 75))
 
         self.drone_speed_input.draw(screen)
         self.missile_speed_input.draw(screen)
@@ -215,185 +218,171 @@ class SimulationApp:
         self.start_button.draw(screen)
 
         if any([self.drone_speed_input.error, self.missile_speed_input.error, self.zone_radius_input.error]):
-            error_text = font_small.render("Проверьте значения!", True, RED)
+            error_text = font_small.render("Ошибка: проверьте значения!", True, RED)
             screen.blit(error_text, (100, 420))
 
         pygame.display.flip()
 
     def draw_simulation_screen(self):
         """Рисует экран симуляции"""
-        screen.fill(WHITE)
+        screen.fill(LIGHT_BLUE)
 
-        self.pause_button.text = "ВОЗОБНОВИТЬ" if self.simulation_paused else "ПАУЗА"
+        # Кнопки управления
+        self.pause_button.text = "▶️ Возобн." if self.simulation_paused else "⏸ Пауза"
         self.pause_button.draw(screen)
         self.reset_button.draw(screen)
 
-        def km_to_px(x_km, y_km):
-            return int(x_km * SCALE), int(y_km * SCALE)
+        # Дрон в центре (8, 6) км
+        drone_px = self.km_to_px(self.drone_pos[0], self.drone_pos[1])
+        cx, cy = drone_px
 
-        # Центр (ракета в центре)
-        center_x_km = WIDTH / (2 * SCALE)
-        center_y_km = HEIGHT / (2 * SCALE)
-        cx, cy = km_to_px(center_x_km, center_y_km)
+        # Зона обнаружения (окружность вокруг дрона)
+        zone_radius_px = int(self.zone_radius_km * SCALE)
+        pygame.draw.circle(screen, GREEN, (cx, cy), zone_radius_px, 2)
 
-        # Зона вокруг ракеты
-        pygame.draw.circle(screen, GREEN, (cx, cy),
-                           int(self.zone_radius_km * SCALE), 2)
+        # Подпись зоны
+        zone_text = font_small.render(f"Зона {self.zone_radius_km} км", True, GREEN)
+        screen.blit(zone_text, (cx - zone_text.get_width() // 2, cy - zone_radius_px - 20))
 
-        # Ракета (неподвижная в центре) - увеличенный размер
-        if self.use_sprites and self.rocket_img:
-            rocket_scaled = pygame.transform.scale(self.rocket_img, (40, 40))
-            rocket_rect = rocket_scaled.get_rect(center=(cx, cy))
-            screen.blit(rocket_scaled, rocket_rect)
-        else:
-            rocket_size = 15
-            pygame.draw.polygon(screen, RED, [
-                (cx, cy),
-                (cx + rocket_size, cy + rocket_size),
-                (cx, cy + rocket_size + 12),
-                (cx - rocket_size, cy + rocket_size)
-            ])
-            pygame.draw.circle(screen, YELLOW, (cx, cy), rocket_size // 2)
+        # Дрон (квадрат с цветом) в CENTER
+        drone_size = 15
+        pygame.draw.rect(screen, BLUE, (cx - drone_size, cy - drone_size,
+                                        drone_size * 2, drone_size * 2))
+        pygame.draw.rect(screen, (30, 60, 150), (cx - drone_size, cy - drone_size,
+                                                   drone_size * 2, drone_size * 2), 2)
 
-        # Дрон (атакует с края) - увеличенный размер
-        if self.drone_active and not self.explosion:
-            dx, dy = km_to_px(self.drone_pos[0], self.drone_pos[1])
-            if self.use_sprites and self.drone_img:
-                # Вращаем дрон в соответствии с направлением
-                angle_deg = math.degrees(self.drone_angle) - 90
-                drone_scaled = pygame.transform.scale(self.drone_img, (40, 40))
-                drone_rotated = pygame.transform.rotate(drone_scaled, angle_deg)
-                drone_rect = drone_rotated.get_rect(center=(dx, dy))
-                screen.blit(drone_rotated, drone_rect)
-            else:
-                drone_size = 12
-                pygame.draw.polygon(screen, BLUE, [
-                    (dx, dy),
-                    (dx - drone_size * math.cos(self.drone_angle),
-                     dy - drone_size * math.sin(self.drone_angle)),
-                    (dx - drone_size * 0.7 * math.cos(self.drone_angle) - drone_size * 0.5 * math.sin(self.drone_angle),
-                     dy - drone_size * 0.7 * math.sin(self.drone_angle) + drone_size * 0.5 * math.cos(self.drone_angle)),
-                    (dx - drone_size * 0.7 * math.cos(self.drone_angle) + drone_size * 0.5 * math.sin(self.drone_angle),
-                     dy - drone_size * 0.7 * math.sin(self.drone_angle) - drone_size * 0.5 * math.cos(self.drone_angle))
+        # Ракета (треугольник)
+        if self.missile_active and not self.explosion:
+            mx, my = self.km_to_px(self.missile_pos[0], self.missile_pos[1])
+
+            # Проверка видимости (с запасом)
+            if (-50 <= mx <= WIDTH + 50) and (-50 <= my <= HEIGHT + 50):
+                # Треугольник указывает в направлении полета
+                tip_x = mx + 15 * math.cos(self.missile_angle)
+                tip_y = my + 15 * math.sin(self.missile_angle)
+
+                side_angle = math.pi / 2
+                left_x = mx + 8 * math.cos(self.missile_angle + side_angle)
+                left_y = my + 8 * math.sin(self.missile_angle + side_angle)
+                right_x = mx + 8 * math.cos(self.missile_angle - side_angle)
+                right_y = my + 8 * math.sin(self.missile_angle - side_angle)
+
+                pygame.draw.polygon(screen, RED, [
+                    (tip_x, tip_y), (left_x, left_y), (right_x, right_y)
                 ])
-                pygame.draw.circle(screen, BLUE, (dx, dy), drone_size // 2)
+                pygame.draw.polygon(screen, (180, 20, 20), [
+                    (tip_x, tip_y), (left_x, left_y), (right_x, right_y)
+                ], 2)
 
-        # Линия преследования (если обнаружен дрон)
-        if self.drone_active and self.tracking_active and not self.explosion:
-            dx, dy = km_to_px(self.drone_pos[0], self.drone_pos[1])
-            pygame.draw.line(screen, YELLOW, (cx, cy), (dx, dy), 1)
-
-        # Взрыв (в центре, у ракеты)
+        # Взрыв
         if self.explosion:
-            ex, ey = cx, cy
-            radius = int(20 * (self.explosion_time / self.explosion_duration))
-            pygame.draw.circle(screen, YELLOW, (ex, ey), radius)
-            pygame.draw.circle(screen, RED, (ex, ey), radius // 2)
+            ex, ey = cx, cy  # взрыв в центре (где дрон)
+            progress = min(1.0, self.explosion_time / self.explosion_duration)
+            base_radius = 20
 
-        # Информация
-        dist_to_drone = math.hypot(
-            self.missile_pos[0] - self.drone_pos[0],
-            self.missile_pos[1] - self.drone_pos[1]) if self.drone_active else 0
-        
-        info_lines = [
-            f"Время: {self.time_elapsed:.3f} ч",
-            f"Дрон пройден: {self.drone_distance:.3f} км",
-            f"Расстояние дрон→ракета: {dist_to_drone:.3f} км",
-            f"Ракета преследует: {'ДА ✓' if self.tracking_active else 'НЕТ'}",
-            f"Скорость дрона атаки: {self.speed_drone_kmh} км/ч",
-            f"Скорость ракеты защиты: {self.speed_missile_kmh} км/ч",
+            colors = [YELLOW, (255, 165, 0), (255, 69, 0), (200, 0, 0)]
+            for i, color in enumerate(colors):
+                radius = int(base_radius * (0.6 + 0.4 * progress) * (1.0 - i * 0.2))
+                if radius > 0:
+                    pygame.draw.circle(screen, color, (ex, ey), radius)
+
+        # Статистика слева
+        info_texts = [
+            f"⏱ Время: {self.time_elapsed:.2f} сек",
+            f"🚁 Дрон пройден: {self.drone_distance:.3f} км",
+            f"🚀 Ракета пройдена: {self.missile_distance:.3f} км",
         ]
 
-        if self.simulation_paused:
-            info_lines.append("⏸ СИМУЛЯЦИЯ ПРИОСТАНОВЛЕНА")
+        if self.missile_active:
+            dist = math.hypot(
+                self.missile_pos[0] - self.drone_pos[0],
+                self.missile_pos[1] - self.drone_pos[1]
+            )
+            info_texts.append(f"📏 Расстояние: {dist:.3f} км")
+        else:
+            info_texts.append("📏 Расстояние: -- км")
 
+        if self.simulation_paused:
+            info_texts.append("⏸ ПАУЗА")
         if self.simulation_finished:
             if self.intercepted:
-                info_lines.append("✅ ДРОН ПЕРЕХВАЧЕН РАКЕТОЙ!")
+                info_texts.append("✅ Ракета перехвачена!")
             else:
-                info_lines.append("❌ ДРОН ИЗБЕЖАЛ ПЕРЕХВАТА!")
+                info_texts.append("❌ Ракета ушла")
 
-        for i, line in enumerate(info_lines):
-            text = font_small.render(line, True, BLACK)
-            screen.blit(text, (10, 60 + i * 22))
+        for i, text in enumerate(info_texts):
+            surf = font_small.render(text, True, BLACK)
+            screen.blit(surf, (10, 60 + i * 25))
 
         pygame.display.flip()
 
     def update_simulation(self):
-        """Обновляет состояние симуляции"""
-        if self.simulation_paused or self.simulation_finished:
-            return
+        """Основной цикл обновления"""
+        if not self.simulation_paused:
+            dt = 0.05  # шаг симуляции в секундах
 
-        dt = 1.0
-        self.time_elapsed += dt / 3600.0
+            # Взрыв
+            if self.explosion:
+                self.explosion_time += dt
+                if self.explosion_time >= self.explosion_duration:
+                    self.simulation_finished = True
+                    self.simulation_paused = True
 
-        # Спавн дрона
-        if not self.drone_active:
-            self.drone_pos, self.drone_angle = self.spawn_drone()
-            self.drone_active = True
+            # Если ракета еще летит
+            if self.missile_active and not self.explosion:
+                self.time_elapsed += dt
 
-        # Движение дрона (случайное)
-        if self.drone_active and not self.explosion:
-            self.drone_direction_change_timer += dt
-            if self.drone_direction_change_timer >= self.drone_direction_change_interval:
-                turn = random.uniform(-math.pi / 6, math.pi / 6)
-                self.drone_angle += turn
-                self.drone_direction_change_timer = 0
-                self.drone_direction_change_interval = random.uniform(2, 6)
+                # Изменение направления ракеты (случайные маневры)
+                self.missile_direction_change_timer += dt
+                if self.missile_direction_change_timer >= self.missile_direction_change_interval:
+                    turn = random.uniform(-math.pi / 6, math.pi / 6)  # ±30 градусов
+                    self.missile_angle += turn
+                    self.missile_direction_change_timer = 0
+                    self.missile_direction_change_interval = random.uniform(2, 6)
 
-            dx = math.cos(self.drone_angle) * self.speed_drone * dt
-            dy = math.sin(self.drone_angle) * self.speed_drone * dt
-            self.drone_pos[0] += dx
-            self.drone_pos[1] += dy
-            self.drone_distance += self.speed_drone * dt
+                # Движение ракеты
+                dx_m = math.cos(self.missile_angle) * self.speed_missile * dt
+                dy_m = math.sin(self.missile_angle) * self.speed_missile * dt
+                self.missile_pos[0] += dx_m
+                self.missile_pos[1] += dy_m
+                self.missile_distance += math.hypot(dx_m, dy_m)
 
-            # Проверка границ экрана
-            margin = 0.5  # Отступ 0.5 км от края
-            max_x = WIDTH / SCALE
-            max_y = HEIGHT / SCALE
-            self.drone_pos[0] = max(margin, min(
-                self.drone_pos[0], max_x - margin))
-            self.drone_pos[1] = max(margin, min(
-                self.drone_pos[1], max_y - margin))
-
-            # Проверка: дрон вошел в зону ракеты?
-            dist_to_rocket = math.hypot(
-                self.drone_pos[0] - self.missile_pos[0],
-                self.drone_pos[1] - self.missile_pos[1])
-            if dist_to_rocket <= self.zone_radius_km and not self.drone_detected:
-                self.drone_detected = True
-                self.tracking_active = True
-
-        # Движение ракеты (преследование, если дрон обнаружен)
-        if self.tracking_active and not self.explosion:
-            dist_to_drone = math.hypot(
-                self.missile_pos[0] - self.drone_pos[0],
-                self.missile_pos[1] - self.drone_pos[1])
-
-            if dist_to_drone > 0:
-                # Направление к дрону
-                dir_x = (self.drone_pos[0] -
-                         self.missile_pos[0]) / dist_to_drone
-                dir_y = (self.drone_pos[1] -
-                         self.missile_pos[1]) / dist_to_drone
-                self.missile_pos[0] += dir_x * self.speed_missile * dt
-                self.missile_pos[1] += dir_y * self.speed_missile * dt
-                self.missile_distance += self.speed_missile * dt
-
-                # Проверка перехвата
-                new_dist = math.hypot(
+                # Расстояние до дрона
+                dist_to_drone = math.hypot(
                     self.missile_pos[0] - self.drone_pos[0],
-                    self.missile_pos[1] - self.drone_pos[1])
-                if new_dist < 0.1:
-                    self.explosion = True
-                    self.explosion_time = 0
-                    self.intercepted = True
+                    self.missile_pos[1] - self.drone_pos[1]
+                )
 
-        # Обновление взрыва
-        if self.explosion:
-            self.explosion_time += dt
-            if self.explosion_time >= self.explosion_duration:
-                self.simulation_finished = True
+                # Движение дрона (убегает от ракеты если она в зоне)
+                if dist_to_drone <= self.zone_radius_km:
+                    if dist_to_drone > 0.01:
+                        # Направление ВЫХОДА из опасности (от ракеты)
+                        dir_x = (self.drone_pos[0] - self.missile_pos[0]) / dist_to_drone
+                        dir_y = (self.drone_pos[1] - self.missile_pos[1]) / dist_to_drone
+                        dx_d = dir_x * self.speed_drone * dt
+                        dy_d = dir_y * self.speed_drone * dt
+                        self.drone_pos[0] += dx_d
+                        self.drone_pos[1] += dy_d
+                        self.drone_distance += math.hypot(dx_d, dy_d)
+
+                    # Проверка перехвата
+                    new_dist = math.hypot(
+                        self.missile_pos[0] - self.drone_pos[0],
+                        self.missile_pos[1] - self.drone_pos[1]
+                    )
+                    if new_dist < 0.1 and not self.explosion:  # 100 метров
+                        self.explosion = True
+                        self.explosion_time = 0
+                        self.intercepted = True
+
+                # Проверка: покинула ли ракета зону досягаемости
+                if (self.missile_pos[0] < -5 or self.missile_pos[0] > WIDTH_KM + 5 or
+                    self.missile_pos[1] < -5 or self.missile_pos[1] > HEIGHT_KM + 5):
+                    self.simulation_finished = True
+                    self.simulation_paused = True
+                    self.missile_active = False
+
+        self.draw_simulation_screen()
 
     def handle_setup_events(self):
         """Обработка событий на экране настройки"""
@@ -418,6 +407,11 @@ class SimulationApp:
                         self.zone_radius_km = zone_val
                         self.state = STATE_RUNNING
                         self.reset_simulation()
+
+                        # Спавн ракеты и запуск симуляции
+                        self.missile_pos, self.missile_angle = self.spawn_missile()
+                        self.missile_active = True
+                        self.simulation_paused = False
             else:
                 self.start_button.update(pygame.mouse.get_pos())
 
@@ -438,9 +432,7 @@ class SimulationApp:
 
                 if self.reset_button.is_clicked(event.pos):
                     self.state = STATE_SETUP
-                    self.drone_speed_input.set_value(self.speed_drone_kmh)
-                    self.missile_speed_input.set_value(self.speed_missile_kmh)
-                    self.zone_radius_input.set_value(self.zone_radius_km)
+                    self.simulation_finished = False
             else:
                 self.pause_button.update(pygame.mouse.get_pos())
                 self.reset_button.update(pygame.mouse.get_pos())
@@ -456,7 +448,6 @@ class SimulationApp:
                 running = self.handle_setup_events()
             else:
                 self.update_simulation()
-                self.draw_simulation_screen()
                 running = self.handle_simulation_events()
 
             self.clock.tick(30)
