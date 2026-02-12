@@ -67,7 +67,8 @@ class InputField:
         label_surf = font_small.render(self.label, True, BLACK)
         surface.blit(label_surf, (self.rect.x, self.rect.y - 25))
 
-        color = LIGHT_BLUE if self.active else (255, 100, 100 if self.error else 255)
+        color = LIGHT_BLUE if self.active else (
+            255, 100, 100 if self.error else 255)
         pygame.draw.rect(surface, color, self.rect)
         pygame.draw.rect(surface, BLACK, self.rect, 2)
 
@@ -112,14 +113,20 @@ class SimulationApp:
 
         # Поля ввода
         input_y = 150
-        self.drone_speed_input = InputField(100, input_y, 250, 35, "Скорость дрона атаки (км/ч):", 100)
-        self.missile_speed_input = InputField(100, input_y + 80, 250, 35, "Скорость ракеты защиты (км/ч):", 200)
-        self.zone_radius_input = InputField(100, input_y + 160, 250, 35, "Радиус зоны (км):", 3)
+        self.drone_speed_input = InputField(
+            100, input_y, 250, 35, "Скорость дрона атаки (км/ч):", 100)
+        self.missile_speed_input = InputField(
+            100, input_y + 80, 250, 35, "Скорость ракеты защиты (км/ч):", 200)
+        self.zone_radius_input = InputField(
+            100, input_y + 160, 250, 35, "Радиус зоны (км):", 3)
 
         # Кнопки
-        self.start_button = Button(100, 350, 250, 50, "НАЧАТЬ СИМУЛЯЦИЮ", color=(100, 200, 100))
-        self.pause_button = Button(650, 10, 120, 40, "ПАУЗА", color=(200, 150, 50))
-        self.reset_button = Button(780, 10, 110, 40, "СБРОСИТЬ", color=(200, 50, 50))
+        self.start_button = Button(
+            100, 350, 250, 50, "НАЧАТЬ СИМУЛЯЦИЮ", color=(100, 200, 100))
+        self.pause_button = Button(
+            650, 10, 120, 40, "ПАУЗА", color=(200, 150, 50))
+        self.reset_button = Button(
+            780, 10, 110, 40, "СБРОСИТЬ", color=(200, 50, 50))
 
         # Переменные симуляции
         self.speed_drone_kmh = 100
@@ -175,7 +182,7 @@ class SimulationApp:
         else:  # right
             x = WIDTH / SCALE + margin_km
             y = random.uniform(0, HEIGHT / SCALE)
-        
+
         angle = random.uniform(0, 2 * math.pi)
         return [x, y], angle
 
@@ -217,28 +224,38 @@ class SimulationApp:
         cx, cy = km_to_px(center_x_km, center_y_km)
 
         # Зона вокруг ракеты
-        pygame.draw.circle(screen, GREEN, (cx, cy), int(self.zone_radius_km * SCALE), 2)
+        pygame.draw.circle(screen, GREEN, (cx, cy),
+                           int(self.zone_radius_km * SCALE), 2)
 
-        # Ракета (неподвижная в центре)
+        # Ракета (неподвижная в центре) - увеличенный размер
+        rocket_size = 15
         pygame.draw.polygon(screen, RED, [
             (cx, cy),
-            (cx + 8, cy + 8),
-            (cx, cy + 12),
-            (cx - 8, cy + 8)
+            (cx + rocket_size, cy + rocket_size),
+            (cx, cy + rocket_size + 12),
+            (cx - rocket_size, cy + rocket_size)
         ])
+        pygame.draw.circle(screen, YELLOW, (cx, cy), rocket_size // 2)
 
-        # Дрон (атакует с края)
+        # Дрон (атакует с края) - увеличенный размер
         if self.drone_active and not self.explosion:
             dx, dy = km_to_px(self.drone_pos[0], self.drone_pos[1])
+            drone_size = 12
             pygame.draw.polygon(screen, BLUE, [
                 (dx, dy),
-                (dx - 8 * math.cos(self.drone_angle),
-                 dy - 8 * math.sin(self.drone_angle)),
-                (dx - 6 * math.cos(self.drone_angle) - 3 * math.sin(self.drone_angle),
-                 dy - 6 * math.sin(self.drone_angle) + 3 * math.cos(self.drone_angle)),
-                (dx - 6 * math.cos(self.drone_angle) + 3 * math.sin(self.drone_angle),
-                 dy - 6 * math.sin(self.drone_angle) - 3 * math.cos(self.drone_angle))
+                (dx - drone_size * math.cos(self.drone_angle),
+                 dy - drone_size * math.sin(self.drone_angle)),
+                (dx - drone_size * 0.7 * math.cos(self.drone_angle) - drone_size * 0.5 * math.sin(self.drone_angle),
+                 dy - drone_size * 0.7 * math.sin(self.drone_angle) + drone_size * 0.5 * math.cos(self.drone_angle)),
+                (dx - drone_size * 0.7 * math.cos(self.drone_angle) + drone_size * 0.5 * math.sin(self.drone_angle),
+                 dy - drone_size * 0.7 * math.sin(self.drone_angle) - drone_size * 0.5 * math.cos(self.drone_angle))
             ])
+            pygame.draw.circle(screen, BLUE, (dx, dy), drone_size // 2)
+
+        # Линия преследования (если обнаружен дрон)
+        if self.drone_active and self.tracking_active and not self.explosion:
+            dx, dy = km_to_px(self.drone_pos[0], self.drone_pos[1])
+            pygame.draw.line(screen, YELLOW, (cx, cy), (dx, dy), 1)
 
         # Взрыв (в центре, у ракеты)
         if self.explosion:
@@ -248,10 +265,15 @@ class SimulationApp:
             pygame.draw.circle(screen, RED, (ex, ey), radius // 2)
 
         # Информация
+        dist_to_drone = math.hypot(
+            self.missile_pos[0] - self.drone_pos[0],
+            self.missile_pos[1] - self.drone_pos[1]) if self.drone_active else 0
+        
         info_lines = [
             f"Время: {self.time_elapsed:.3f} ч",
             f"Дрон пройден: {self.drone_distance:.3f} км",
-            f"Ракета преследует: {self.tracking_active}",
+            f"Расстояние дрон→ракета: {dist_to_drone:.3f} км",
+            f"Ракета преследует: {'ДА ✓' if self.tracking_active else 'НЕТ'}",
             f"Скорость дрона атаки: {self.speed_drone_kmh} км/ч",
             f"Скорость ракеты защиты: {self.speed_missile_kmh} км/ч",
         ]
@@ -299,6 +321,15 @@ class SimulationApp:
             self.drone_pos[1] += dy
             self.drone_distance += self.speed_drone * dt
 
+            # Проверка границ экрана
+            margin = 0.5  # Отступ 0.5 км от края
+            max_x = WIDTH / SCALE
+            max_y = HEIGHT / SCALE
+            self.drone_pos[0] = max(margin, min(
+                self.drone_pos[0], max_x - margin))
+            self.drone_pos[1] = max(margin, min(
+                self.drone_pos[1], max_y - margin))
+
             # Проверка: дрон вошел в зону ракеты?
             dist_to_rocket = math.hypot(
                 self.drone_pos[0] - self.missile_pos[0],
@@ -315,8 +346,10 @@ class SimulationApp:
 
             if dist_to_drone > 0:
                 # Направление к дрону
-                dir_x = (self.drone_pos[0] - self.missile_pos[0]) / dist_to_drone
-                dir_y = (self.drone_pos[1] - self.missile_pos[1]) / dist_to_drone
+                dir_x = (self.drone_pos[0] -
+                         self.missile_pos[0]) / dist_to_drone
+                dir_y = (self.drone_pos[1] -
+                         self.missile_pos[1]) / dist_to_drone
                 self.missile_pos[0] += dir_x * self.speed_missile * dt
                 self.missile_pos[1] += dir_y * self.speed_missile * dt
                 self.missile_distance += self.speed_missile * dt
