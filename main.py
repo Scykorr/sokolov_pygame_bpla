@@ -83,7 +83,7 @@ class InputField:
         surface.blit(text_surf, (self.rect.x + 5, self.rect.y + 5))
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEBTN_DOWN:
+        if event.type == pygame.MOUSEBUTTONDOWN:
             self.active = self.rect.collidepoint(event.pos)
         elif event.type == pygame.KEYDOWN and self.active:
             if event.key == pygame.K_BACKSPACE:
@@ -355,7 +355,7 @@ class SimulationApp:
             self.missile_speed_input.handle_event(event)
             self.zone_radius_input.handle_event(event)
 
-            if event.type == pygame.MOUSEBTN_DOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 self.start_button.update(event.pos)
                 if self.start_button.is_clicked(event.pos):
                     # Проверка значений
@@ -380,7 +380,7 @@ class SimulationApp:
             if event.type == pygame.QUIT:
                 return False
 
-            if event.type == pygame.MOUSEBTN_DOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 self.pause_button.update(event.pos)
                 self.reset_button.update(event.pos)
 
