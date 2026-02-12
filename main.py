@@ -133,6 +133,19 @@ class SimulationApp:
         self.speed_missile_kmh = 200
         self.zone_radius_km = 3.0
 
+        # Загрузка спрайтов
+        self.rocket_img = None
+        self.drone_img = None
+        self.use_sprites = False
+        try:
+            self.rocket_img = pygame.image.load("rocket.png").convert_alpha()
+            self.drone_img = pygame.image.load("drone.png").convert_alpha()
+            self.use_sprites = True
+            print("✓ Спрайты загружены")
+        except pygame.error as e:
+            print(f"⚠ Не удалось загрузить спрайты: {e}")
+            print("  Буду использовать геометрические фигуры")
+
         self.clock = pygame.time.Clock()
         self.reset_simulation()
 
@@ -228,29 +241,42 @@ class SimulationApp:
                            int(self.zone_radius_km * SCALE), 2)
 
         # Ракета (неподвижная в центре) - увеличенный размер
-        rocket_size = 15
-        pygame.draw.polygon(screen, RED, [
-            (cx, cy),
-            (cx + rocket_size, cy + rocket_size),
-            (cx, cy + rocket_size + 12),
-            (cx - rocket_size, cy + rocket_size)
-        ])
-        pygame.draw.circle(screen, YELLOW, (cx, cy), rocket_size // 2)
+        if self.use_sprites and self.rocket_img:
+            rocket_scaled = pygame.transform.scale(self.rocket_img, (40, 40))
+            rocket_rect = rocket_scaled.get_rect(center=(cx, cy))
+            screen.blit(rocket_scaled, rocket_rect)
+        else:
+            rocket_size = 15
+            pygame.draw.polygon(screen, RED, [
+                (cx, cy),
+                (cx + rocket_size, cy + rocket_size),
+                (cx, cy + rocket_size + 12),
+                (cx - rocket_size, cy + rocket_size)
+            ])
+            pygame.draw.circle(screen, YELLOW, (cx, cy), rocket_size // 2)
 
         # Дрон (атакует с края) - увеличенный размер
         if self.drone_active and not self.explosion:
             dx, dy = km_to_px(self.drone_pos[0], self.drone_pos[1])
-            drone_size = 12
-            pygame.draw.polygon(screen, BLUE, [
-                (dx, dy),
-                (dx - drone_size * math.cos(self.drone_angle),
-                 dy - drone_size * math.sin(self.drone_angle)),
-                (dx - drone_size * 0.7 * math.cos(self.drone_angle) - drone_size * 0.5 * math.sin(self.drone_angle),
-                 dy - drone_size * 0.7 * math.sin(self.drone_angle) + drone_size * 0.5 * math.cos(self.drone_angle)),
-                (dx - drone_size * 0.7 * math.cos(self.drone_angle) + drone_size * 0.5 * math.sin(self.drone_angle),
-                 dy - drone_size * 0.7 * math.sin(self.drone_angle) - drone_size * 0.5 * math.cos(self.drone_angle))
-            ])
-            pygame.draw.circle(screen, BLUE, (dx, dy), drone_size // 2)
+            if self.use_sprites and self.drone_img:
+                # Вращаем дрон в соответствии с направлением
+                angle_deg = math.degrees(self.drone_angle) - 90
+                drone_scaled = pygame.transform.scale(self.drone_img, (40, 40))
+                drone_rotated = pygame.transform.rotate(drone_scaled, angle_deg)
+                drone_rect = drone_rotated.get_rect(center=(dx, dy))
+                screen.blit(drone_rotated, drone_rect)
+            else:
+                drone_size = 12
+                pygame.draw.polygon(screen, BLUE, [
+                    (dx, dy),
+                    (dx - drone_size * math.cos(self.drone_angle),
+                     dy - drone_size * math.sin(self.drone_angle)),
+                    (dx - drone_size * 0.7 * math.cos(self.drone_angle) - drone_size * 0.5 * math.sin(self.drone_angle),
+                     dy - drone_size * 0.7 * math.sin(self.drone_angle) + drone_size * 0.5 * math.cos(self.drone_angle)),
+                    (dx - drone_size * 0.7 * math.cos(self.drone_angle) + drone_size * 0.5 * math.sin(self.drone_angle),
+                     dy - drone_size * 0.7 * math.sin(self.drone_angle) - drone_size * 0.5 * math.cos(self.drone_angle))
+                ])
+                pygame.draw.circle(screen, BLUE, (dx, dy), drone_size // 2)
 
         # Линия преследования (если обнаружен дрон)
         if self.drone_active and self.tracking_active and not self.explosion:
